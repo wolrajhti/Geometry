@@ -2,12 +2,10 @@ local Surface = {}
 Surface.__index = Surface
 
 local function new(...)
-	local surface = {vertices = {}, index = {}, triangles = {}, colors = {}}
+	local surface = {vertices = {}, index = {}, triangles = {}, colors = {}, constraints = {}}
 	--[[
 	t[1], t[2], t[3] = vertices
-	t[4], t[5], t[6] = neigbhor (triangle)
-	t[7], t[8], t[9] = time of middle of edge (ex : middle = t[2] + t[7] * (t[3] - t[2]))
-	t[10], t[11], t[12] = max width
+	t[4], t[5], t[6] = neigbhors (triangle)
 	]]
 	local coordinates = {...}
 	local triangles = love.math.triangulate(...)
@@ -18,11 +16,9 @@ local function new(...)
 		if not surface.index[x] then
 			table.insert(surface.vertices, Vector(x, y))
 			surface.index[x] = {}
-			-- surface.index[x][y] = surface.vertices[#surface.vertices] -21/05/16
 			surface.index[x][y] = #surface.vertices --21/05/16
 		elseif not surface.index[x][y] then
 			table.insert(surface.vertices, Vector(x, y))
-			-- surface.index[x][y] = surface.vertices[#surface.vertices] --21/05/16
 			surface.index[x][y] = #surface.vertices --21/05/16
 		end
 	end
@@ -51,48 +47,110 @@ local function new(...)
 			end
 		end
 	end
-	--création des normales
-	-- for i, t in ipairs(surface.triangles) do
-		-- for j = 1, 3 do
-			-- if not t[j + 3] then
-				-- t[mod(j + 1)].next = t[mod(j + 2)]
-				-- t[mod(j + 2)].prev = t[mod(j + 1)]
-			-- end
-		-- end
-	-- end
-	--configuration des voisinnages
-	-- for i, t in ipairs(surface.triangles) do
-		-- for j = 1, 3 do
-			-- if t[j + 3] then
-				-- local intersections = {}
-				-- local a, b = t[mod(j + 1)], t[mod(j + 2)]
-				-- for k, u in ipairs(surface.triangles) do
-					-- for l = 1, 3 do
-						-- if not u[l + 3] then
-							-- local c, d = u[mod(l + 1)], u[mod(l + 2)]
-							-- table.insert(intersections, (d - c):cross(a - c) / (b - a):cross(d - c))
-						-- end
-					-- end
-				-- end
-				-- table.sort(intersections)
-				-- if #intersections ~= 0 then
-					-- local first, last = 0, 1
-					-- for m, r in ipairs(intersections) do
-						-- if r < 0 then first = r end
-						-- if r > 1 then last = r end
-					-- end
-					-- local width = (a + (b - a) * last - (a + (b - a) * first)):norm()
-					-- t[j + 6] = (first + last) / 2
-					-- t[j + 9] = width
-				-- end
-			-- end
-		-- end
-	-- end
 	--création des couleurs
 	for i, t in ipairs(surface.triangles) do
 		table.insert(surface.colors, {math.random(1, 255), math.random(1, 255), math.random(1, 255), 100})
 	end
 	return setmetatable(surface, Surface)
+end
+
+function Surface:addTrianglesFromSurface(surface)
+	local x, y
+	for i, t in ipairs(surface.triangles) do
+		for j = 1, 3 do
+			x, y = surface.vertices[t[j]].x, surface.vertices[t[j]].y
+			if not self.index[x] then
+				table.insert(self.vertices, Vector(x, y))
+				self.index[x] = {}
+				self.index[x][y] = #self.vertices --21/05/16
+			elseif not self.index[x][y] then
+				table.insert(self.vertices, Vector(x, y))
+				self.index[x][y] = #self.vertices --21/05/16
+			end
+		end
+	end
+	--création des triangles
+	for i, t in ipairs(surface.triangles) do
+		table.insert(self.triangles, {
+			self.index[surface.vertices[t[1]].x][surface.vertices[t[1]].y],
+			self.index[surface.vertices[t[2]].x][surface.vertices[t[2]].y],
+			self.index[surface.vertices[t[3]].x][surface.vertices[t[3]].y]
+		})
+	end
+	--création des voisinnages
+	local u, v = {}, {}
+	local mod = function(v) return (v - 1) % 3 + 1 end
+	for i = 1, #self.triangles - 1 do
+		u = self.triangles[i]
+		for j = i + 1, #self.triangles do
+			v = self.triangles[j]
+			for k = 1, 3 do
+				for l = 1, 3 do
+					if u[k] == v[l] then
+						for m = 1, 2 do
+							if u[mod(k + m)] == v[mod(l - m)] then
+								u[mod(k + 2 * m) + 3] = j
+								v[mod(l - 2 * m) + 3] = i 
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	--création des couleurs
+	for i, t in ipairs(self.triangles) do
+		table.insert(self.colors, {math.random(1, 255), math.random(1, 255), math.random(1, 255), 100})
+	end
+end
+
+function Surface:addConstraintEdge(a, b)
+	local tunnel = self:tunnel(a, b)
+	if tunnel then
+		local coords = surf:getCoordinatesFromVerticesIndex(surf:getBoundary(tunnel))
+		table.insert(coords, b.x)
+		table.insert(coords, b.y)
+		table.insert(coords, a.x)
+		table.insert(coords, a.y)
+		local lSurf = new(unpack(coords))
+
+		coords = surf:getCoordinatesFromVerticesIndex(surf:getBoundary(tunnel, -1))
+		table.insert(coords, b.x)
+		table.insert(coords, b.y)
+		table.insert(coords, a.x)
+		table.insert(coords, a.y)
+		local rSurf = new(unpack(coords))
+		
+		for i, t in ipairs(tunnel) do self:removeTriangle(t) end
+		
+		self:addTrianglesFromSurface(lSurf)
+		self:addTrianglesFromSurface(rSurf)
+		
+		table.insert(self.constraints, {surf:getVertexIndex(a.x, a.y), surf:getVertexIndex(b.x, b.y)})
+		
+		surf:setConstraints()
+		-- debug:write('\n')
+		-- debug:write('\n')
+		-- debug:write('\n')
+		-- for i, c in ipairs(self.constraints) do
+			-- debug:write(c[1]..', '..c[2]..'\n')
+		-- end
+	end
+end
+
+function Surface:setConstraints()
+	for k, e in ipairs(self.constraints) do
+		for i, t in ipairs(self.triangles) do
+			for j = 1, 3 do
+				if t[j] == e[1] and t[self.mod(j + 1)] == e[2] then t[self.mod(j - 1) + 3] = nil end
+				if t[j] == e[2] and t[self.mod(j + 1)] == e[1] then t[self.mod(j - 1) + 3] = nil end
+			end
+		end
+	end
+end
+
+function Surface:getVertexIndex(x, y)
+	return self.index[x][y]
 end
 
 function Surface.mod(v) return (v - 1) % 3 + 1 end
@@ -121,7 +179,6 @@ end
 
 function Surface:locate(vector)
 	for i, t in ipairs(self.triangles) do
-		-- if self.pointinpoly(vector, {t[1], t[2], t[3]}) then
 		if self.pointinpoly(vector, {self:getVertices(i)}) then --21/05/16
 			return t
 		end
@@ -153,20 +210,19 @@ function Surface:removeTriangle(t) --20/05/16
 	end
 end
 
-function Surface:getOpposite(ta, tb) --20/05/16
-	if ta ~= tb then
-		for i = 1, 3 do
-			if self.triangles[ta[i + 3]] == tb then return self.vertices[ta[i]] end
-		end
-	end
-end
+-- function Surface:getOpposite(ta, tb) --20/05/16
+	-- if ta ~= tb then
+		-- for i = 1, 3 do
+			-- if self.triangles[ta[i + 3]] == tb then return self.vertices[ta[i]] end
+		-- end
+	-- end
+-- end
 
 function Surface:tunnel(a, b) --20/05/16
 	local ta, tb = self:locate(a), self:locate(b)
 	if ta and tb then
 		local t = ta
 		local mod = function(v) return (v - 1) % 3 + 1 end
-		-- local res = {{t[1].x, t[1].y, t[2].x, t[2].y, t[3].x, t[3].y}}
 		local res = {t}
 		local from
 		while t ~= tb do
@@ -174,91 +230,45 @@ function Surface:tunnel(a, b) --20/05/16
 				if self.triangles[t[mod(i - 1) + 3]] and self.triangles[t[mod(i - 1) + 3]] ~= from and self.intersegment(self.vertices[t[i]], self.vertices[t[mod(i + 1)]], a, b) then
 					from = t
 					t = self.triangles[t[mod(i - 1) + 3]]
-					-- table.insert(res, {t[1].x, t[1].y, t[2].x, t[2].y, t[3].x, t[3].y})
 					table.insert(res, t)
 					break
 				end
 				if i == 3 then return end
 			end
 		end
-		return res, self:getOpposite(res[1], res[math.min(2, #res)]), self:getOpposite(res[#res], res[math.max(#res - 1, 1)])
+		return res--, self:getOpposite(res[1], res[math.min(2, #res)]), self:getOpposite(res[#res], res[math.max(#res - 1, 1)])
 	end
 end
 
-function Surface:getLeftBoundary(tunnel) --22/05/16
-	local b = {}
-	local vIdx, tIdx = 1, 1
-	for i = 1, 3 do
-		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx + 1] then
-			table.insert(b, tunnel[tIdx][i])
-			vIdx = i
-			break
-		end
-	end
-	debug:write(string.format('vIdx, tIdx = %d, %d\n', vIdx, tIdx))
-	while tIdx < #tunnel do
-		debug:write(string.format('\t\tb[#b] = %d\n', b[#b]))
-		debug:write(string.format('\t\tvIdx, tIdx = %d, %d\n', vIdx, tIdx))
-		-- if not tunnel[tIdx][self.mod(vIdx + 2) + 3] then
-		if not self:findTriInTunnel(tunnel, tunnel[tIdx][self.mod(vIdx + 2) + 3]) then
-			debug:write('\t\tnot tunnel['..tIdx..']['..(self.mod(vIdx + 2) + 3)..']\n')
-			table.insert(b, tunnel[tIdx][self.mod(vIdx + 1)])
-		end
-		tIdx = tIdx + 1
+function Surface:getBoundary(tunnel, coef) --22/05/16
+	coef = coef or 1
+	local b, vIdx, tIdx = {}, 1, 1
+	if #tunnel > 1 then
 		for i = 1, 3 do
-			if tunnel[tIdx][i] == b[#b] then
-				debug:write('\t\ttunnel['..tIdx..']['..i..'] == '..b[#b]..'\n')
-				vIdx = i
-				break
+			if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx + 1] then
+				table.insert(b, tunnel[tIdx][i]) vIdx = i break
 			end
 		end
-		debug:write('\n\n\n')
-	end
-	for i = 1, 3 do
-		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx - 1] then
-			table.insert(b, tunnel[tIdx][i])
-			vIdx = i
-			break
-		end
-	end
-	return b
-end
-
-function Surface:getRightBoundary(tunnel) --22/05/16
-	local b = {}
-	local vIdx, tIdx = 1, 1
-	for i = 1, 3 do
-		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx + 1] then
-			table.insert(b, tunnel[tIdx][i])
-			vIdx = i
-			break
-		end
-	end
-	debug:write(string.format('vIdx, tIdx = %d, %d\n', vIdx, tIdx))
-	while tIdx < #tunnel do
-		debug:write(string.format('\t\tb[#b] = %d\n', b[#b]))
-		debug:write(string.format('\t\tvIdx, tIdx = %d, %d\n', vIdx, tIdx))
-		-- if not tunnel[tIdx][self.mod(vIdx + 2) + 3] then
-		if not self:findTriInTunnel(tunnel, tunnel[tIdx][self.mod(vIdx - 2) + 3]) then
-			debug:write('\t\tnot tunnel['..tIdx..']['..(self.mod(vIdx - 2) + 3)..']\n')
-			table.insert(b, tunnel[tIdx][self.mod(vIdx - 1)])
-		end
-		tIdx = tIdx + 1
-		for i = 1, 3 do
-			if tunnel[tIdx][i] == b[#b] then
-				debug:write('\t\ttunnel['..tIdx..']['..i..'] == '..b[#b]..'\n')
-				vIdx = i
-				break
+		while tIdx < #tunnel do
+			if not self:findTriInTunnel(tunnel, tunnel[tIdx][self.mod(vIdx + coef * 2) + 3]) then
+				table.insert(b, tunnel[tIdx][self.mod(vIdx + coef * 1)])
+			end
+			tIdx = tIdx + 1
+			for i = 1, 3 do
+				if tunnel[tIdx][i] == b[#b] then vIdx = i break end
 			end
 		end
-		debug:write('\n\n\n')
-	end
-	for i = 1, 3 do
-		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx - 1] then
-			table.insert(b, tunnel[tIdx][i])
-			vIdx = i
-			break
+		for i = 1, 3 do
+			if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx - 1] then
+				table.insert(b, tunnel[tIdx][i]) vIdx = i break
+			end
 		end
+	elseif #tunnel == 1 then
+		table.insert(b, tunnel[1][1])
+		if coef == 1 then
+			table.insert(b, tunnel[1][2])
+		end
+		table.insert(b, tunnel[1][3])
 	end
 	return b
 end
@@ -302,42 +312,24 @@ function Surface.proj(v, a, b)
 end
 
 function Surface:draw()
-	-- local a, b, c = {}, {}, {}
 	local mod = function(v) return (v - 1) % 3 + 1 end
 	for i, t in ipairs(self.triangles) do
 		if DEBUG then love.graphics.setColor(self.colors[i])
 		else love.graphics.setColor(255, 255, 255, 200) end
-		-- a, b, c = t[1], t[2], t[3]
-		-- love.graphics.polygon("fill", a.x, a.y, b.x, b.y, c.x, c.y) 
 		love.graphics.polygon("fill", self:getCoordinates(i)) --21/05/16
 	end
 	love.graphics.setColor(255, 255, 255, 255)
 	love.graphics.print(#self.vertices, 16, 16)
 	love.graphics.print(#self.triangles, 16, 32)
-	love.graphics.setColor(0, 0, 255, 255)
+	love.graphics.setColor(255, 0, 0)
 	for i, t in ipairs(self.triangles) do
 		for j = 1, 3 do
 			if not t[j + 3] then
-				-- love.graphics.line(t[mod(j + 1)].x, t[mod(j + 1)].y, t[mod(j + 2)].x, t[mod(j + 2)].y)
 				love.graphics.line(self.vertices[t[mod(j + 1)]].x, self.vertices[t[mod(j + 1)]].y,
 				self.vertices[t[mod(j + 2)]].x, self.vertices[t[mod(j + 2)]].y) --21/05/16
 			end
 		end
 	end
-	------------------------------------INTERSECTIONS--------------------------
-	-- for i, t in ipairs(self.triangles) do
-		-- for j = 1, 3 do
-			-- if not t[j + 3] then
-				-- local v = t[j]
-				-- local n = (v.next - v):rotate(math.pi / 2):normalize(15)
-				-- local p = (v.prev - v):rotate(-math.pi / 2):normalize(15)
-				-- love.graphics.setColor(0, 255, 0, 255)
-				-- love.graphics.line(v.x, v.y, v.x + n.x, v.y + n.y)
-				-- love.graphics.setColor(255, 0, 0, 255)
-				-- love.graphics.line(v.x, v.y, v.x + p.x, v.y + p.y)
-			-- end
-		-- end
-	-- end
 end
 
 return setmetatable({new = new}, {__call = function(_, ...) return new(...) end})
