@@ -18,10 +18,12 @@ local function new(...)
 		if not surface.index[x] then
 			table.insert(surface.vertices, Vector(x, y))
 			surface.index[x] = {}
-			surface.index[x][y] = surface.vertices[#surface.vertices]
+			-- surface.index[x][y] = surface.vertices[#surface.vertices] -21/05/16
+			surface.index[x][y] = #surface.vertices --21/05/16
 		elseif not surface.index[x][y] then
 			table.insert(surface.vertices, Vector(x, y))
-			surface.index[x][y] = surface.vertices[#surface.vertices]
+			-- surface.index[x][y] = surface.vertices[#surface.vertices] --21/05/16
+			surface.index[x][y] = #surface.vertices --21/05/16
 		end
 	end
 	--création des triangles
@@ -50,42 +52,42 @@ local function new(...)
 		end
 	end
 	--création des normales
-	for i, t in ipairs(surface.triangles) do
-		for j = 1, 3 do
-			if not t[j + 3] then
-				t[mod(j + 1)].next = t[mod(j + 2)]
-				t[mod(j + 2)].prev = t[mod(j + 1)]
-			end
-		end
-	end
+	-- for i, t in ipairs(surface.triangles) do
+		-- for j = 1, 3 do
+			-- if not t[j + 3] then
+				-- t[mod(j + 1)].next = t[mod(j + 2)]
+				-- t[mod(j + 2)].prev = t[mod(j + 1)]
+			-- end
+		-- end
+	-- end
 	--configuration des voisinnages
-	for i, t in ipairs(surface.triangles) do
-		for j = 1, 3 do
-			if t[j + 3] then
-				local intersections = {}
-				local a, b = t[mod(j + 1)], t[mod(j + 2)]
-				for k, u in ipairs(surface.triangles) do
-					for l = 1, 3 do
-						if not u[l + 3] then
-							local c, d = u[mod(l + 1)], u[mod(l + 2)]
-							table.insert(intersections, (d - c):cross(a - c) / (b - a):cross(d - c))
-						end
-					end
-				end
-				table.sort(intersections)
-				if #intersections ~= 0 then
-					local first, last = 0, 1
-					for m, r in ipairs(intersections) do
-						if r < 0 then first = r end
-						if r > 1 then last = r end
-					end
-					local width = (a + (b - a) * last - (a + (b - a) * first)):norm()
-					t[j + 6] = (first + last) / 2
-					t[j + 9] = width
-				end
-			end
-		end
-	end
+	-- for i, t in ipairs(surface.triangles) do
+		-- for j = 1, 3 do
+			-- if t[j + 3] then
+				-- local intersections = {}
+				-- local a, b = t[mod(j + 1)], t[mod(j + 2)]
+				-- for k, u in ipairs(surface.triangles) do
+					-- for l = 1, 3 do
+						-- if not u[l + 3] then
+							-- local c, d = u[mod(l + 1)], u[mod(l + 2)]
+							-- table.insert(intersections, (d - c):cross(a - c) / (b - a):cross(d - c))
+						-- end
+					-- end
+				-- end
+				-- table.sort(intersections)
+				-- if #intersections ~= 0 then
+					-- local first, last = 0, 1
+					-- for m, r in ipairs(intersections) do
+						-- if r < 0 then first = r end
+						-- if r > 1 then last = r end
+					-- end
+					-- local width = (a + (b - a) * last - (a + (b - a) * first)):norm()
+					-- t[j + 6] = (first + last) / 2
+					-- t[j + 9] = width
+				-- end
+			-- end
+		-- end
+	-- end
 	--création des couleurs
 	for i, t in ipairs(surface.triangles) do
 		table.insert(surface.colors, {math.random(1, 255), math.random(1, 255), math.random(1, 255), 100})
@@ -93,9 +95,34 @@ local function new(...)
 	return setmetatable(surface, Surface)
 end
 
+function Surface.mod(v) return (v - 1) % 3 + 1 end
+
+function Surface:getVertex(i, j) --21/05/16
+	return self.vertices[self.triangles[i][j]]
+end
+
+function Surface:getVertices(i) --21/05/16
+	return self.vertices[self.triangles[i][1]], self.vertices[self.triangles[i][2]], self.vertices[self.triangles[i][3]]
+end
+
+function Surface:getCoordinates(i) --21/05/16
+	local a, b, c = self:getVertices(i)
+	return a.x, a.y, b.x, b.y, c.x, c.y
+end
+
+function Surface:getCoordinatesFromVerticesIndex(indexes)
+	local res = {}
+	for i, index in ipairs(indexes) do
+		table.insert(res, self.vertices[index].x)
+		table.insert(res, self.vertices[index].y)
+	end
+	return res
+end
+
 function Surface:locate(vector)
 	for i, t in ipairs(self.triangles) do
-		if self.pointinpoly(vector, {t[1], t[2], t[3]}) then
+		-- if self.pointinpoly(vector, {t[1], t[2], t[3]}) then
+		if self.pointinpoly(vector, {self:getVertices(i)}) then --21/05/16
 			return t
 		end
 	end
@@ -113,7 +140,15 @@ function Surface:removeTriangle(t) --20/05/16
 					end
 				end
 			end
-			return table.remove(self.triangles, i)
+			table.remove(self.triangles, i)
+			for j, T in ipairs(self.triangles) do
+				for k = 4, 6 do
+					if T[k] and T[k] >= i then
+						T[k] = T[k] - 1
+					end
+				end
+			end
+			break
 		end
 	end
 end
@@ -121,7 +156,7 @@ end
 function Surface:getOpposite(ta, tb) --20/05/16
 	if ta ~= tb then
 		for i = 1, 3 do
-			if self.triangles[ta[i + 3]] == tb then return ta[i] end
+			if self.triangles[ta[i + 3]] == tb then return self.vertices[ta[i]] end
 		end
 	end
 end
@@ -136,7 +171,7 @@ function Surface:tunnel(a, b) --20/05/16
 		local from
 		while t ~= tb do
 			for i = 1, 3 do
-				if self.triangles[t[mod(i - 1) + 3]] and self.triangles[t[mod(i - 1) + 3]] ~= from and self.intersegment(t[i], t[mod(i + 1)], a, b) then
+				if self.triangles[t[mod(i - 1) + 3]] and self.triangles[t[mod(i - 1) + 3]] ~= from and self.intersegment(self.vertices[t[i]], self.vertices[t[mod(i + 1)]], a, b) then
 					from = t
 					t = self.triangles[t[mod(i - 1) + 3]]
 					-- table.insert(res, {t[1].x, t[1].y, t[2].x, t[2].y, t[3].x, t[3].y})
@@ -147,6 +182,92 @@ function Surface:tunnel(a, b) --20/05/16
 			end
 		end
 		return res, self:getOpposite(res[1], res[math.min(2, #res)]), self:getOpposite(res[#res], res[math.max(#res - 1, 1)])
+	end
+end
+
+function Surface:getLeftBoundary(tunnel) --22/05/16
+	local b = {}
+	local vIdx, tIdx = 1, 1
+	for i = 1, 3 do
+		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx + 1] then
+			table.insert(b, tunnel[tIdx][i])
+			vIdx = i
+			break
+		end
+	end
+	debug:write(string.format('vIdx, tIdx = %d, %d\n', vIdx, tIdx))
+	while tIdx < #tunnel do
+		debug:write(string.format('\t\tb[#b] = %d\n', b[#b]))
+		debug:write(string.format('\t\tvIdx, tIdx = %d, %d\n', vIdx, tIdx))
+		-- if not tunnel[tIdx][self.mod(vIdx + 2) + 3] then
+		if not self:findTriInTunnel(tunnel, tunnel[tIdx][self.mod(vIdx + 2) + 3]) then
+			debug:write('\t\tnot tunnel['..tIdx..']['..(self.mod(vIdx + 2) + 3)..']\n')
+			table.insert(b, tunnel[tIdx][self.mod(vIdx + 1)])
+		end
+		tIdx = tIdx + 1
+		for i = 1, 3 do
+			if tunnel[tIdx][i] == b[#b] then
+				debug:write('\t\ttunnel['..tIdx..']['..i..'] == '..b[#b]..'\n')
+				vIdx = i
+				break
+			end
+		end
+		debug:write('\n\n\n')
+	end
+	for i = 1, 3 do
+		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx - 1] then
+			table.insert(b, tunnel[tIdx][i])
+			vIdx = i
+			break
+		end
+	end
+	return b
+end
+
+function Surface:getRightBoundary(tunnel) --22/05/16
+	local b = {}
+	local vIdx, tIdx = 1, 1
+	for i = 1, 3 do
+		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx + 1] then
+			table.insert(b, tunnel[tIdx][i])
+			vIdx = i
+			break
+		end
+	end
+	debug:write(string.format('vIdx, tIdx = %d, %d\n', vIdx, tIdx))
+	while tIdx < #tunnel do
+		debug:write(string.format('\t\tb[#b] = %d\n', b[#b]))
+		debug:write(string.format('\t\tvIdx, tIdx = %d, %d\n', vIdx, tIdx))
+		-- if not tunnel[tIdx][self.mod(vIdx + 2) + 3] then
+		if not self:findTriInTunnel(tunnel, tunnel[tIdx][self.mod(vIdx - 2) + 3]) then
+			debug:write('\t\tnot tunnel['..tIdx..']['..(self.mod(vIdx - 2) + 3)..']\n')
+			table.insert(b, tunnel[tIdx][self.mod(vIdx - 1)])
+		end
+		tIdx = tIdx + 1
+		for i = 1, 3 do
+			if tunnel[tIdx][i] == b[#b] then
+				debug:write('\t\ttunnel['..tIdx..']['..i..'] == '..b[#b]..'\n')
+				vIdx = i
+				break
+			end
+		end
+		debug:write('\n\n\n')
+	end
+	for i = 1, 3 do
+		if self.triangles[tunnel[tIdx][i + 3]] and self.triangles[tunnel[tIdx][i + 3]] == tunnel[tIdx - 1] then
+			table.insert(b, tunnel[tIdx][i])
+			vIdx = i
+			break
+		end
+	end
+	return b
+end
+
+function Surface:findTriInTunnel(tunnel, tri)
+	if tri then
+		for i, t in ipairs(tunnel) do
+			if t == self.triangles[tri] then return true end
+		end
 	end
 end
 
@@ -181,13 +302,14 @@ function Surface.proj(v, a, b)
 end
 
 function Surface:draw()
-	local a, b, c = {}, {}, {}
+	-- local a, b, c = {}, {}, {}
 	local mod = function(v) return (v - 1) % 3 + 1 end
 	for i, t in ipairs(self.triangles) do
 		if DEBUG then love.graphics.setColor(self.colors[i])
 		else love.graphics.setColor(255, 255, 255, 200) end
-		a, b, c = t[1], t[2], t[3]
-		love.graphics.polygon("fill", a.x, a.y, b.x, b.y, c.x, c.y) 
+		-- a, b, c = t[1], t[2], t[3]
+		-- love.graphics.polygon("fill", a.x, a.y, b.x, b.y, c.x, c.y) 
+		love.graphics.polygon("fill", self:getCoordinates(i)) --21/05/16
 	end
 	love.graphics.setColor(255, 255, 255, 255)
 	love.graphics.print(#self.vertices, 16, 16)
@@ -196,24 +318,26 @@ function Surface:draw()
 	for i, t in ipairs(self.triangles) do
 		for j = 1, 3 do
 			if not t[j + 3] then
-				love.graphics.line(t[mod(j + 1)].x, t[mod(j + 1)].y, t[mod(j + 2)].x, t[mod(j + 2)].y)
+				-- love.graphics.line(t[mod(j + 1)].x, t[mod(j + 1)].y, t[mod(j + 2)].x, t[mod(j + 2)].y)
+				love.graphics.line(self.vertices[t[mod(j + 1)]].x, self.vertices[t[mod(j + 1)]].y,
+				self.vertices[t[mod(j + 2)]].x, self.vertices[t[mod(j + 2)]].y) --21/05/16
 			end
 		end
 	end
 	------------------------------------INTERSECTIONS--------------------------
-	for i, t in ipairs(self.triangles) do
-		for j = 1, 3 do
-			if not t[j + 3] then
-				local v = t[j]
-				local n = (v.next - v):rotate(math.pi / 2):normalize(15)
-				local p = (v.prev - v):rotate(-math.pi / 2):normalize(15)
-				love.graphics.setColor(0, 255, 0, 255)
-				love.graphics.line(v.x, v.y, v.x + n.x, v.y + n.y)
-				love.graphics.setColor(255, 0, 0, 255)
-				love.graphics.line(v.x, v.y, v.x + p.x, v.y + p.y)
-			end
-		end
-	end
+	-- for i, t in ipairs(self.triangles) do
+		-- for j = 1, 3 do
+			-- if not t[j + 3] then
+				-- local v = t[j]
+				-- local n = (v.next - v):rotate(math.pi / 2):normalize(15)
+				-- local p = (v.prev - v):rotate(-math.pi / 2):normalize(15)
+				-- love.graphics.setColor(0, 255, 0, 255)
+				-- love.graphics.line(v.x, v.y, v.x + n.x, v.y + n.y)
+				-- love.graphics.setColor(255, 0, 0, 255)
+				-- love.graphics.line(v.x, v.y, v.x + p.x, v.y + p.y)
+			-- end
+		-- end
+	-- end
 end
 
 return setmetatable({new = new}, {__call = function(_, ...) return new(...) end})
