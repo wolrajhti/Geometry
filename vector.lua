@@ -1,3 +1,4 @@
+local class = require 'middleclass'
 local Vector = class('Vector')
 
 function Vector:initialize(X, y)

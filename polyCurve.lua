@@ -1,6 +1,7 @@
-local PolyCurve = class('PolyCurve', require 'src.geometry.curve')
+local class = require 'middleclass'
+local PolyCurve = class('PolyCurve', require 'geometry.curve')
 
-local Vector = require 'src.geometry.vector'
+local Vector = require 'geometry.vector'
 -- local VerticesConverter = require 'src.geometry.verticesConverter'
 
 function PolyCurve:initialize(curves, signs) -- OK
@@ -138,7 +139,7 @@ function PolyCurve:getIntersectionsWithCurve(other) -- OK
 				inter[self] = self.times[i] + (1 - cInter[curve]) * (self.times[i + 1] - self.times[i])
 				table.insert(inters, inter)
 			end
-		end		
+		end
 	end
 	table.sort(inters, function(a, b) return a[self] < b[self] end)
 	return inters
@@ -251,7 +252,7 @@ end
 function PolyCurve:updateTime(t, dt) -- OK
 	-- debug:write('function PolyCurve:update('..t..', '..dt..')\n')
 	if dt > 0 then
-	-- debug:write('if dt > 0 then\n')	
+	-- debug:write('if dt > 0 then\n')
 		if t == 1 then
 		-- debug:write('if t == 1 then\n')
 			return t, dt

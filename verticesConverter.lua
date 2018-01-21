@@ -1,6 +1,7 @@
+local class = require 'middleclass'
 local VerticesConverter = class('VerticesConverter')
 
-local Vector = require 'src.geometry.vector'
+local Vector = require 'geometry.vector'
 
 function VerticesConverter:initialize()
 end
@@ -10,6 +11,14 @@ function VerticesConverter.getVertices(args)
 	if #args == 1 then args = args[1] end
 	for i = 1, #args - 1, 2 do
 		table.insert(vertices, Vector(args[i], args[i + 1]))
+	end
+	return vertices
+end
+
+function VerticesConverter.getVerticesFromCells(cell_size, cells)
+	local vertices = {}
+	for i, cell in ipairs(cells) do
+		table.insert(vertices, Vector(cell_size * (cell.i + 0.5), cell_size * (cell.j + 0.5)))
 	end
 	return vertices
 end

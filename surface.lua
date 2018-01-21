@@ -1,3 +1,5 @@
+local class = require 'middleclass'
+
 local Surface = {}
 Surface.__index = Surface
 
@@ -39,7 +41,7 @@ local function new(...)
 						for m = 1, 2 do
 							if u[mod(k + m)] == v[mod(l - m)] then
 								u[mod(k + 2 * m) + 3] = j
-								v[mod(l - 2 * m) + 3] = i 
+								v[mod(l - 2 * m) + 3] = i
 							end
 						end
 					end
@@ -90,7 +92,7 @@ function Surface:addTrianglesFromSurface(surface)
 						for m = 1, 2 do
 							if u[mod(k + m)] == v[mod(l - m)] then
 								u[mod(k + 2 * m) + 3] = j
-								v[mod(l - 2 * m) + 3] = i 
+								v[mod(l - 2 * m) + 3] = i
 							end
 						end
 					end
@@ -120,14 +122,14 @@ function Surface:addConstraintEdge(a, b)
 		table.insert(coords, a.x)
 		table.insert(coords, a.y)
 		local rSurf = new(unpack(coords))
-		
+
 		for i, t in ipairs(tunnel) do self:removeTriangle(t) end
-		
+
 		self:addTrianglesFromSurface(lSurf)
 		self:addTrianglesFromSurface(rSurf)
-		
+
 		table.insert(self.constraints, {surf:getVertexIndex(a.x, a.y), surf:getVertexIndex(b.x, b.y)})
-		
+
 		surf:setConstraints()
 		-- debug:write('\n')
 		-- debug:write('\n')
